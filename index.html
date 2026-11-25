@@ -1,0 +1,2300 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayPulse — Team & Hours Tracker</title>
+    <!-- Embedded Modern Vector Favicon (Orbital Time Ring + Pulse Line in Cyan #38BDF8 & Terracotta #D97757) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2338BDF8'/%3E%3Cstop offset='100%25' stop-color='%23D97757'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='%2305070C'/%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%23161B26' stroke-width='4'/%3E%3Cpath d='M32 10 A22 22 0 1 1 11.4 39.6' fill='none' stroke='url(%23g)' stroke-width='4.5' stroke-linecap='round'/%3E%3Cpath d='M13 33 H22 L26.5 22 L33.5 43 L38 28 L42 33 H51' fill='none' stroke='%2338BDF8' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='51' cy='33' r='3' fill='%23D97757'/%3E%3C/svg%3E">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Plus Jakarta Sans, Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Supabase JS v2 SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- jsPDF & AutoTable for Weekly PDF Reports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        space: {
+                            950: '#030407',
+                            900: '#07090F',
+                            850: '#0A0D14',
+                            800: '#10141F',
+                            700: '#161B26',
+                        },
+                        pulse: {
+                            cyan: '#38BDF8',
+                            terra: '#D97757',
+                            terraLight: '#E07A5F',
+                            textMain: '#D4D4D4',
+                            textSub: '#A3A3A3',
+                            textMuted: '#737373',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #030407;
+            color: #D4D4D4;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+        .pulse-card {
+            background: linear-gradient(180deg, rgba(10, 13, 20, 0.94) 0%, rgba(6, 8, 13, 0.98) 100%);
+            border: 1px solid #161B26;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.78);
+            backdrop-filter: blur(18px);
+        }
+        .pulse-card:hover {
+            border-color: rgba(56, 189, 248, 0.25);
+        }
+        .pulse-glow-border {
+            position: relative;
+        }
+        .pulse-glow-border::before {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.45), rgba(217, 119, 87, 0.42), rgba(22, 27, 38, 0.2));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        .dial-svg {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        input, select, textarea {
+            color: #D4D4D4;
+        }
+        input:focus, select:focus, textarea:focus {
+            color: #E5E5E5;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #737373;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #030407;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #161B26;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #38BDF8;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative selection:bg-pulse-cyan selection:text-space-950">
+
+    <!-- Animated Starfield & Subtle Ambient Glows -->
+    <canvas id="starfield-canvas" class="fixed inset-0 w-full h-full pointer-events-none z-0"></canvas>
+    <div class="fixed -top-40 -left-40 w-96 h-96 rounded-full bg-pulse-cyan/5 blur-[130px] pointer-events-none z-0"></div>
+    <div class="fixed top-1/3 -right-40 w-96 h-96 rounded-full bg-pulse-terra/5 blur-[130px] pointer-events-none z-0"></div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+    <!-- ==================== INITIALIZING LOADER ==================== -->
+    <div id="loading-screen" class="fixed inset-0 z-40 flex flex-col items-center justify-center bg-space-950/95 backdrop-blur-xl">
+        <div class="w-12 h-12 rounded-2xl bg-space-850 border border-space-700 flex items-center justify-center mb-4 animate-pulse">
+            <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="15.5" stroke="#161B26" stroke-width="2.5" />
+                <path d="M20 4.5 A15.5 15.5 0 1 1 5.6 25.6" stroke="#38BDF8" stroke-width="2.75" stroke-linecap="round" />
+                <path d="M7.5 20.5 H13.5 L16.2 13.5 L20.4 27 L23.4 17.5 L25.8 20.5 H32.5" stroke="#D97757" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+        </div>
+        <p class="font-display text-sm font-bold text-pulse-textMain tracking-wide">Connecting to PayPulse Cloud...</p>
+    </div>
+
+    <!-- ==================== 1. AUTHENTICATION SCREEN (SIGN IN / CREATE ACCOUNT) ==================== -->
+    <section id="auth-screen" class="hidden relative z-20 flex-1 flex items-center justify-center px-4 py-10">
+        <div class="w-full max-w-md pulse-card pulse-glow-border rounded-[2rem] p-7 sm:p-9">
+            <!-- Brand Header -->
+            <div class="flex flex-col items-center text-center mb-7">
+                <div class="w-14 h-14 rounded-2xl bg-space-850 border border-space-700 flex items-center justify-center shadow-xl mb-3.5">
+                    <svg width="34" height="34" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="authLogoGrad" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#38BDF8" />
+                                <stop offset="60%" stop-color="#38BDF8" />
+                                <stop offset="100%" stop-color="#D97757" />
+                            </linearGradient>
+                        </defs>
+                        <circle cx="20" cy="20" r="15.5" stroke="#161B26" stroke-width="2.5" />
+                        <path d="M20 4.5 A15.5 15.5 0 1 1 5.6 25.6" stroke="url(#authLogoGrad)" stroke-width="2.75" stroke-linecap="round" />
+                        <circle cx="20" cy="4.5" r="2.2" fill="#D97757" />
+                        <path d="M7.5 20.5 H13.5 L16.2 13.5 L20.4 27 L23.4 17.5 L25.8 20.5 H32.5" stroke="#38BDF8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="32.5" cy="20.5" r="2.1" fill="#D97757" />
+                    </svg>
+                </div>
+                <h1 class="font-display font-extrabold text-2xl tracking-tight text-pulse-textMain">
+                    Pay<span class="bg-gradient-to-r from-pulse-cyan to-pulse-terra bg-clip-text text-transparent">Pulse</span>
+                </h1>
+                <p class="text-xs text-pulse-textSub mt-1">Sign in to track work hours, breaks &amp; weekly reports</p>
+            </div>
+
+            <!-- Auth Mode Switcher Pill -->
+            <div class="grid grid-cols-2 bg-space-950 p-1 rounded-full border border-space-700 mb-6">
+                <button type="button" id="auth-tab-signin" onclick="switchAuthTab('signin')" class="py-2 rounded-full text-xs font-bold bg-pulse-cyan text-space-950 transition-all cursor-pointer">
+                    Sign In
+                </button>
+                <button type="button" id="auth-tab-signup" onclick="switchAuthTab('signup')" class="py-2 rounded-full text-xs font-bold text-pulse-textSub hover:text-pulse-textMain transition-all cursor-pointer">
+                    Create Account
+                </button>
+            </div>
+
+            <!-- SIGN IN FORM -->
+            <form id="signin-form" onsubmit="handleSignIn(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1.5">Email Address</label>
+                    <input type="email" id="signin-email" required placeholder="you@company.com" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-4 py-3 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1.5">Password</label>
+                    <input type="password" id="signin-password" required placeholder="••••••••" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-4 py-3 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <button type="submit" id="signin-submit-btn" class="w-full py-3.5 px-6 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-display font-extrabold text-sm tracking-wide transition-all shadow-lg shadow-pulse-cyan/20 cursor-pointer mt-2">
+                    Sign In to Workspace
+                </button>
+            </form>
+
+            <!-- CREATE ACCOUNT FORM -->
+            <form id="signup-form" onsubmit="handleSignUp(event)" class="hidden space-y-3.5">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">First Name <span class="text-pulse-terra">*</span></label>
+                        <input type="text" id="signup-first" required placeholder="e.g., Sofia" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">Last Name <span class="text-pulse-terra">*</span></label>
+                        <input type="text" id="signup-last" required placeholder="e.g., Alvarez" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Email Address <span class="text-pulse-terra">*</span></label>
+                    <input type="email" id="signup-email" required placeholder="name@company.com" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Phone Number <span class="text-pulse-terra">*</span></label>
+                    <input type="tel" id="signup-phone" required placeholder="+61 400 000 000" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Password (min 6 characters) <span class="text-pulse-terra">*</span></label>
+                    <input type="password" id="signup-password" minlength="6" required placeholder="Create a password" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div class="p-3.5 rounded-2xl bg-space-950 border border-space-700">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-bold text-pulse-textMain">Hourly Rate ($/hr) <span class="text-pulse-textMuted font-normal">(Optional)</span></label>
+                        <span class="text-[10px] font-mono text-pulse-cyan">Displays "N/A" if blank</span>
+                    </div>
+                    <input type="number" step="0.01" min="0" id="signup-rate" placeholder="Leave blank for hours-only tracking (N/A)" class="w-full rounded-xl bg-space-900 border border-space-700 focus:border-pulse-cyan px-3.5 py-2 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <button type="submit" id="signup-submit-btn" class="w-full py-3.5 px-6 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-display font-extrabold text-sm tracking-wide transition-all shadow-lg shadow-pulse-cyan/20 cursor-pointer">
+                    Create Account
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- ==================== 2. AUTHENTICATED APPLICATION SHELL ==================== -->
+    <div id="app-shell" class="hidden flex-1 flex flex-col relative z-10">
+
+        <!-- TOP NAVIGATION BAR -->
+        <header class="sticky top-0 z-30 border-b border-space-700 bg-space-950/90 backdrop-blur-xl">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-wrap items-center justify-between min-h-[72px] py-2.5 gap-3">
+
+                    <!-- Modern Vector Logo: Orbital Time Ring + Heartbeat Pulse Line -->
+                    <div class="flex items-center gap-3.5 group cursor-pointer" onclick="switchMainTab('tracker')">
+                        <div class="relative w-11 h-11 rounded-2xl bg-space-850 border border-space-700 group-hover:border-pulse-cyan/45 flex items-center justify-center shadow-lg shadow-black/60 transition-all">
+                            <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="navLogoGrad" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                                        <stop offset="0%" stop-color="#38BDF8" />
+                                        <stop offset="60%" stop-color="#38BDF8" />
+                                        <stop offset="100%" stop-color="#D97757" />
+                                    </linearGradient>
+                                </defs>
+                                <circle cx="20" cy="20" r="15.5" stroke="#161B26" stroke-width="2.5" />
+                                <path d="M20 4.5 A15.5 15.5 0 1 1 5.6 25.6" stroke="url(#navLogoGrad)" stroke-width="2.75" stroke-linecap="round" />
+                                <circle cx="20" cy="4.5" r="2.2" fill="#D97757" />
+                                <path d="M7.5 20.5 H13.5 L16.2 13.5 L20.4 27 L23.4 17.5 L25.8 20.5 H32.5" stroke="#38BDF8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+                                <circle cx="32.5" cy="20.5" r="2.1" fill="#D97757" />
+                            </svg>
+                        </div>
+                        <div>
+                            <span class="font-display font-extrabold text-xl tracking-tight text-pulse-textMain block leading-none">
+                                Pay<span class="bg-gradient-to-r from-pulse-cyan to-pulse-terra bg-clip-text text-transparent">Pulse</span>
+                            </span>
+                            <span class="text-[11px] text-pulse-textMuted hidden sm:block mt-1">Work Time &amp; Team Hours Tracker</span>
+                        </div>
+                    </div>
+
+                    <!-- Admin-Only Segmented Toggle ("Admin / All Employees" vs "My Individual Tracker") -->
+                    <div id="admin-scope-toggle-wrap" class="hidden items-center bg-space-850 p-1 rounded-full border border-space-700">
+                        <button type="button" onclick="setAdminScope('all')" id="scope-btn-all" class="px-3.5 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer bg-pulse-cyan text-space-950 shadow-sm">
+                            Admin / All Employees
+                        </button>
+                        <button type="button" onclick="setAdminScope('mine')" id="scope-btn-mine" class="px-3.5 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer text-pulse-textSub hover:text-pulse-textMain">
+                            My Individual Tracker
+                        </button>
+                    </div>
+
+                    <!-- Right Controls: Nav Tabs (Admin), User Badge, Active Break, + Log Past Shift, Reports, Sign Out -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Admin Team Directory Tab -->
+                        <nav id="admin-nav-tabs" class="hidden items-center gap-1 bg-space-850 p-1 rounded-full border border-space-700">
+                            <button type="button" onclick="switchMainTab('tracker')" id="nav-tab-tracker" class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-space-800 text-pulse-cyan transition-all cursor-pointer">
+                                Tracker
+                            </button>
+                            <button type="button" onclick="switchMainTab('team')" id="nav-tab-team" class="px-3.5 py-1.5 rounded-full text-xs font-semibold text-pulse-textSub hover:text-pulse-textMain transition-all cursor-pointer">
+                                Team Directory
+                            </button>
+                        </nav>
+
+                        <!-- Logged-in User Pill Badge -->
+                        <div class="inline-flex items-center gap-2 bg-space-850 px-3 py-1.5 rounded-full border border-space-700">
+                            <span id="header-role-pill" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-pulse-cyan/15 text-pulse-cyan border border-pulse-cyan/35">
+                                EMPLOYEE
+                            </span>
+                            <span id="header-user-name" class="text-xs font-bold text-pulse-textMain max-w-[120px] truncate">User</span>
+                        </div>
+
+                        <!-- + Log Past Shift Button -->
+                        <button type="button" onclick="openPastShiftModal()" class="inline-flex items-center gap-1 px-3.5 py-2 rounded-full bg-space-850 hover:bg-space-800 border border-space-700 hover:border-pulse-cyan/40 text-pulse-textMain font-semibold text-xs transition-all cursor-pointer">
+                            <i data-lucide="plus" class="w-3.5 h-3.5 text-pulse-cyan"></i>
+                            <span>Log Past Shift</span>
+                        </button>
+
+                        <!-- Primary Electric Cyan "Reports" Button -->
+                        <button type="button" onclick="openReportsModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-extrabold text-xs transition-all shadow-lg shadow-pulse-cyan/20 cursor-pointer">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                            <span>Reports</span>
+                        </button>
+
+                        <!-- Sign Out Button -->
+                        <button type="button" onclick="handleSignOut()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-space-850 hover:bg-pulse-terra/15 border border-space-700 hover:border-pulse-terra/40 text-pulse-textSub hover:text-pulse-terra text-xs font-semibold transition-all cursor-pointer" title="Sign Out">
+                            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                            <span class="hidden sm:inline">Sign Out</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN WORKSPACE -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+            <!-- ==================== TAB 1: ORBIT DIAL TRACKER & SHIFT LOGS ==================== -->
+            <div id="section-tracker" class="space-y-8">
+
+                <!-- Workspace Status Banner -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pulse-card rounded-3xl p-4 sm:px-6">
+                    <div class="flex items-center gap-3">
+                        <div id="banner-icon-wrap" class="w-9 h-9 rounded-full bg-pulse-cyan/15 border border-pulse-cyan/35 flex items-center justify-center text-pulse-cyan">
+                            <i data-lucide="orbit" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <span id="banner-title" class="text-sm font-bold text-pulse-textMain block">Personal Time Tracker</span>
+                            <span id="banner-subtitle" class="text-xs text-pulse-textSub">Synced in real time with PayPulse Cloud</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 text-xs text-pulse-textSub">
+                        <span>Hourly Rate:</span>
+                        <span id="banner-rate-pill" class="font-mono font-bold px-3 py-1 rounded-full bg-space-950 border border-space-700 text-pulse-cyan">N/A</span>
+                    </div>
+                </div>
+
+                <!-- PRIMARY GRID: LEFT ORBIT DIAL (7 COLS) + RIGHT ACTIVE BREAK & WEEKLY ANALYTICS (5 COLS) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                    <!-- LEFT 7 COLS: INTERACTIVE RADIAL TIME SELECTOR WHEEL ("ORBIT DIAL") -->
+                    <div class="lg:col-span-7 pulse-card pulse-glow-border rounded-[2rem] p-6 sm:p-8 flex flex-col items-center">
+
+                        <!-- Top Bar inside Dial Card -->
+                        <div class="w-full flex flex-wrap items-center justify-between gap-2 mb-4">
+                            <span class="text-xs font-bold uppercase tracking-widest text-pulse-cyan flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-pulse-cyan"></span>
+                                Orbit Dial Selector
+                            </span>
+                            <span id="dial-status-chip" class="text-[11px] font-semibold px-3 py-1 rounded-full bg-space-950 border border-space-700 text-pulse-textSub">
+                                Ready to Track
+                            </span>
+                        </div>
+
+                        <!-- Large Center Duration Readout (#D4D4D4) & Dynamic Completion Pill -->
+                        <div class="text-center mb-2">
+                            <div id="dial-primary-readout" class="font-display text-4xl sm:text-5xl font-extrabold tracking-tight text-pulse-textMain tabular-nums">
+                                1h 30m
+                            </div>
+                            <div class="mt-2 inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-space-950 border border-space-700 text-xs font-medium text-pulse-textSub tabular-nums">
+                                <i data-lucide="clock" class="w-3.5 h-3.5 text-pulse-cyan"></i>
+                                <span id="dial-end-time-pill">Ends today at 04:50 AM</span>
+                            </div>
+                        </div>
+
+                        <!-- INTERACTIVE CIRCULAR RADIAL WHEEL SVG (Mouse + Touch Draggable) -->
+                        <div class="relative w-64 h-64 sm:w-72 sm:h-72 my-3 flex items-center justify-center">
+                            <svg id="orbit-dial-svg" viewBox="0 0 280 280" class="w-full h-full dial-svg overflow-visible">
+                                <defs>
+                                    <linearGradient id="pulseDialGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#38BDF8" />
+                                        <stop offset="60%" stop-color="#38BDF8" />
+                                        <stop offset="100%" stop-color="#D97757" />
+                                    </linearGradient>
+                                    <filter id="dialGlow" x="-25%" y="-25%" width="150%" height="150%">
+                                        <feGaussianBlur stdDeviation="4.5" result="blur" />
+                                        <feMerge>
+                                            <feMergeNode in="blur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                        </feMerge>
+                                    </filter>
+                                </defs>
+
+                                <circle cx="140" cy="140" r="126" fill="rgba(3, 4, 7, 0.85)" stroke="#161B26" stroke-width="1.5" />
+                                <g id="dial-ticks-group"></g>
+                                <circle cx="140" cy="140" r="102" fill="none" stroke="#161B26" stroke-width="12" />
+                                <circle id="dial-progress-arc" cx="140" cy="140" r="102" fill="none" stroke="url(#pulseDialGrad)" stroke-width="12" stroke-linecap="round" transform="rotate(-90 140 140)" filter="url(#dialGlow)" />
+                                <circle cx="140" cy="140" r="76" fill="#05070B" stroke="#161B26" stroke-width="1.2" />
+
+                                <g id="dial-knob-group" class="cursor-grab active:cursor-grabbing">
+                                    <circle id="dial-knob-halo" cx="140" cy="38" r="18" fill="rgba(217, 119, 87, 0.22)" />
+                                    <circle id="dial-knob" cx="140" cy="38" r="11" fill="#030407" stroke="#D97757" stroke-width="3.5" />
+                                </g>
+                            </svg>
+
+                            <!-- Center Dial Info -->
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-8">
+                                <span id="dial-center-badge" class="text-[10px] font-bold uppercase tracking-widest text-pulse-terra mb-1">DRAG WHEEL</span>
+                                <span id="dial-center-user" class="text-xs font-bold text-pulse-textMain leading-tight truncate max-w-[130px]">User</span>
+                                <span id="dial-center-sub" class="text-[10px] text-pulse-textMuted mt-1">15m – 12h increments</span>
+                            </div>
+                        </div>
+
+                        <!-- Quick Duration Presets + "Open Count-Up" Mode Pill -->
+                        <div id="dial-presets-row" class="flex flex-wrap items-center justify-center gap-2 mb-5">
+                            <button type="button" onclick="setDialDuration(15)" class="px-3 py-1 rounded-full text-xs font-semibold bg-space-950 hover:bg-space-800 border border-space-700 text-pulse-textSub hover:text-pulse-textMain cursor-pointer">15m</button>
+                            <button type="button" onclick="setDialDuration(30)" class="px-3 py-1 rounded-full text-xs font-semibold bg-space-950 hover:bg-space-800 border border-space-700 text-pulse-textSub hover:text-pulse-textMain cursor-pointer">30m</button>
+                            <button type="button" onclick="setDialDuration(60)" class="px-3 py-1 rounded-full text-xs font-semibold bg-space-950 hover:bg-space-800 border border-space-700 text-pulse-textSub hover:text-pulse-textMain cursor-pointer">1h</button>
+                            <button type="button" onclick="setDialDuration(90)" class="px-3 py-1 rounded-full text-xs font-semibold bg-pulse-cyan/15 border border-pulse-cyan/50 text-pulse-cyan cursor-pointer">1h 30m</button>
+                            <button type="button" onclick="setDialDuration(120)" class="px-3 py-1 rounded-full text-xs font-semibold bg-space-950 hover:bg-space-800 border border-space-700 text-pulse-textSub hover:text-pulse-textMain cursor-pointer">2h</button>
+                            <button type="button" onclick="setDialDuration(240)" class="px-3 py-1 rounded-full text-xs font-semibold bg-space-950 hover:bg-space-800 border border-space-700 text-pulse-textSub hover:text-pulse-textMain cursor-pointer">4h</button>
+                            <button type="button" onclick="setDialDuration(480)" class="px-3 py-1 rounded-full text-xs font-semibold bg-space-950 hover:bg-space-800 border border-space-700 text-pulse-textSub hover:text-pulse-textMain cursor-pointer">8h</button>
+                            <button type="button" onclick="setDialDuration(0)" class="px-3.5 py-1 rounded-full text-xs font-bold bg-pulse-terra/15 hover:bg-pulse-terra/25 border border-pulse-terra/45 text-pulse-terra cursor-pointer">Open Count-Up</button>
+                        </div>
+
+                        <!-- Category Selector ("Other" with Custom Activity & Start/End Time Pickers) -->
+                        <div class="w-full space-y-3 mb-5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold uppercase tracking-wider text-pulse-textMuted mb-1">Shift Category</label>
+                                    <select id="dial-category" onchange="handleDialCategoryChange()" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-pulse-textMain focus:outline-none">
+                                        <option value="Regular Shift">Regular Shift</option>
+                                        <option value="Project Work">Project Work</option>
+                                        <option value="Client Meeting">Client Meeting</option>
+                                        <option value="Admin & Ops">Admin &amp; Ops</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold uppercase tracking-wider text-pulse-textMuted mb-1">Session Notes</label>
+                                    <input type="text" id="dial-notes" placeholder="Optional task description..." class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-xs sm:text-sm text-pulse-textMain focus:outline-none">
+                                </div>
+                            </div>
+
+                            <!-- Conditional "Other" Custom Activity + Start/End Time Block -->
+                            <div id="dial-other-panel" class="hidden p-4 rounded-2xl bg-pulse-terra/10 border border-pulse-terra/35 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-pulse-terra flex items-center gap-1.5">
+                                        <i data-lucide="calendar-clock" class="w-3.5 h-3.5"></i> Custom "Other" Schedule
+                                    </span>
+                                    <span id="dial-other-calc-badge" class="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-space-950 border border-space-700 text-pulse-cyan">
+                                        2h 00m (2.00 hrs)
+                                    </span>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-pulse-textSub mb-1">Custom Activity Label</label>
+                                        <input type="text" id="dial-other-label" placeholder="e.g., Offsite Audit" class="w-full rounded-xl bg-space-950 border border-space-700 focus:border-pulse-terra px-3 py-2 text-xs text-pulse-textMain focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-pulse-textSub mb-1">Start Time</label>
+                                        <input type="time" id="dial-other-start" value="14:00" onchange="updateOtherDurationPreview()" class="w-full rounded-xl bg-space-950 border border-space-700 focus:border-pulse-terra px-3 py-2 text-xs text-pulse-textMain focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-pulse-textSub mb-1">End Time</label>
+                                        <input type="time" id="dial-other-end" value="16:00" onchange="updateOtherDurationPreview()" class="w-full rounded-xl bg-space-950 border border-space-700 focus:border-pulse-terra px-3 py-2 text-xs text-pulse-textMain focus:outline-none">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <button type="button" onclick="applyOtherRangeToDial()" class="py-2 px-3 rounded-full bg-space-950 hover:bg-space-800 border border-pulse-cyan/40 text-pulse-cyan font-bold text-xs transition-colors cursor-pointer">
+                                        Load Duration into Dial
+                                    </button>
+                                    <button type="button" onclick="logOtherBlockDirectly()" class="py-2 px-3 rounded-full bg-pulse-terra hover:bg-pulse-terraLight text-space-950 font-extrabold text-xs transition-colors cursor-pointer">
+                                        Save Custom Time Block Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Idle Start Session CTA -->
+                        <div id="dial-idle-controls" class="w-full">
+                            <button type="button" onclick="startWorkSession()" class="w-full py-3.5 px-6 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-display font-extrabold text-sm sm:text-base tracking-wide transition-all shadow-lg shadow-pulse-cyan/20 flex items-center justify-center gap-2 cursor-pointer">
+                                <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                                <span id="start-session-label">Start Session (1h 30m)</span>
+                            </button>
+                        </div>
+
+                        <!-- Active Session Controls (+15m, Take Active Break, Finish & Save) -->
+                        <div id="dial-active-controls" class="hidden w-full grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <button type="button" onclick="extendActiveSession(15)" class="py-3 px-4 rounded-full bg-space-850 hover:bg-space-800 border border-space-700 hover:border-pulse-cyan text-pulse-textMain font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i data-lucide="plus-circle" class="w-4 h-4 text-pulse-cyan"></i>
+                                <span>+15m</span>
+                            </button>
+                            <button type="button" onclick="openActiveBreakModal(false)" class="py-3 px-4 rounded-full bg-pulse-terra/15 hover:bg-pulse-terra/25 border border-pulse-terra/45 text-pulse-terra font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i data-lucide="coffee" class="w-4 h-4"></i>
+                                <span>Take Active Break</span>
+                            </button>
+                            <button type="button" id="finish-session-btn" onclick="finishAndSaveSession()" class="py-3 px-4 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-pulse-cyan/20 cursor-pointer">
+                                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                                <span>Finish &amp; Save</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT 5 COLS: ACTIVE BREAK CARD + WEEKLY ANALYTICS -->
+                    <div class="lg:col-span-5 space-y-6">
+
+                        <!-- Dedicated Active Break Reminder Card -->
+                        <div class="pulse-card rounded-[2rem] p-6 space-y-4">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-full bg-pulse-terra/15 border border-pulse-terra/35 flex items-center justify-center text-pulse-terra">
+                                        <i data-lucide="coffee" class="w-4 h-4"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="font-display font-bold text-base text-pulse-textMain">Active Break</h2>
+                                        <p class="text-[11px] text-pulse-textMuted">Interval alerts with Web Audio chime</p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="openActiveBreakModal(true)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pulse-terra/15 hover:bg-pulse-terra/25 border border-pulse-terra/45 text-pulse-terra text-xs font-bold transition-all cursor-pointer">
+                                    <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i>
+                                    <span>Test Alert Now</span>
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                                <div>
+                                    <label class="block text-[11px] font-bold uppercase tracking-wider text-pulse-textMuted mb-1">Remind Me Every</label>
+                                    <select id="break-interval-select" onchange="handleBreakIntervalSelect(this.value)" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-terra px-3.5 py-2.5 text-xs font-semibold text-pulse-textMain focus:outline-none">
+                                        <option value="25">25 minutes</option>
+                                        <option value="45" selected>45 minutes</option>
+                                        <option value="60">60 minutes</option>
+                                        <option value="90">90 minutes</option>
+                                        <option value="custom">Custom minutes...</option>
+                                        <option value="0">Disabled</option>
+                                    </select>
+                                </div>
+                                <div id="custom-break-interval-wrap" class="hidden">
+                                    <label class="block text-[11px] font-bold uppercase tracking-wider text-pulse-textMuted mb-1">Custom Interval (min)</label>
+                                    <input type="number" id="custom-break-interval-input" min="1" max="480" value="30" onchange="setBreakReminderInterval(this.value)" class="w-full rounded-2xl bg-space-950 border border-pulse-terra/50 px-3.5 py-2.5 text-xs font-bold text-pulse-textMain focus:outline-none">
+                                </div>
+                                <div id="break-next-status-box" class="p-2.5 rounded-2xl bg-space-950 border border-space-700 text-xs text-pulse-textSub flex items-center justify-between">
+                                    <span>Alert Status:</span>
+                                    <span id="break-countdown-status" class="font-mono font-bold text-pulse-terra">Every 45m</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Weekly Hours Summary & Mon-Sun Bar Chart -->
+                        <div class="pulse-card rounded-[2rem] p-6 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="font-display font-bold text-base text-pulse-textMain">Weekly Summary</h3>
+                                    <p id="weekly-range-label" class="text-xs text-pulse-textMuted">Current Week (Mon – Sun)</p>
+                                </div>
+                                <button type="button" onclick="openReportsModal()" class="px-3.5 py-1.5 rounded-full bg-space-850 hover:bg-space-800 border border-space-700 text-xs font-bold text-pulse-cyan transition-colors cursor-pointer">
+                                    Reports
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="p-3.5 rounded-2xl bg-space-950 border border-space-700">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-pulse-textMuted block">Total Hours</span>
+                                    <span id="kpi-total-hours" class="font-display text-xl font-extrabold text-pulse-textMain tabular-nums mt-1 block">0.00 hrs</span>
+                                    <span id="kpi-shift-count" class="text-[11px] text-pulse-cyan mt-0.5 block">0 shifts logged</span>
+                                </div>
+
+                                <div class="p-3.5 rounded-2xl bg-space-950 border border-space-700">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-pulse-textMuted block">Estimated Gross Pay</span>
+                                    <span id="kpi-estimated-pay" class="font-display text-xl font-extrabold text-pulse-terra tabular-nums mt-1 block">N/A</span>
+                                    <span id="kpi-pay-note" class="text-[11px] text-pulse-textMuted mt-0.5 block">Rate not configured</span>
+                                </div>
+                            </div>
+
+                            <!-- Mon-Sun Visual Bar Chart -->
+                            <div class="pt-2">
+                                <div id="weekly-chart-bars" class="h-28 flex items-end justify-between gap-2 px-1"></div>
+                                <div id="weekly-chart-labels" class="grid grid-cols-7 gap-2 text-center mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SHIFT HISTORY TABLE -->
+                <section class="pulse-card rounded-[2rem] overflow-hidden">
+                    <div class="p-6 border-b border-space-700 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="font-display font-bold text-lg text-pulse-textMain">Shift History Log</h2>
+                            <p id="shift-table-subtitle" class="text-xs text-pulse-textMuted">All completed work sessions and logged shifts</p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <!-- Admin-Only Employee Filter -->
+                            <select id="filter-employee-select" onchange="renderDashboard()" class="hidden rounded-full bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2 text-xs font-semibold text-pulse-textMain focus:outline-none">
+                                <option value="ALL">All Employees</option>
+                            </select>
+
+                            <select id="filter-week-select" onchange="renderDashboard()" class="rounded-full bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2 text-xs font-semibold text-pulse-textMain focus:outline-none">
+                                <option value="current">Current Week</option>
+                                <option value="last">Previous Week</option>
+                                <option value="ALL">All Recorded Weeks</option>
+                            </select>
+
+                            <select id="filter-category-select" onchange="renderDashboard()" class="rounded-full bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2 text-xs font-semibold text-pulse-textMain focus:outline-none">
+                                <option value="ALL">All Categories</option>
+                                <option value="Regular Shift">Regular Shift</option>
+                                <option value="Project Work">Project Work</option>
+                                <option value="Client Meeting">Client Meeting</option>
+                                <option value="Admin & Ops">Admin &amp; Ops</option>
+                                <option value="Other">Other</option>
+                            </select>
+
+                            <button type="button" onclick="openReportsModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-extrabold text-xs transition-colors cursor-pointer">
+                                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                                <span>Reports</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-space-950 border-b border-space-700 text-[11px] font-bold uppercase tracking-wider text-pulse-textMuted">
+                                    <th class="py-3.5 px-6">Employee</th>
+                                    <th class="py-3.5 px-4">Date</th>
+                                    <th class="py-3.5 px-4">Time Window</th>
+                                    <th class="py-3.5 px-4">Category &amp; Notes</th>
+                                    <th class="py-3.5 px-4">Duration</th>
+                                    <th class="py-3.5 px-4 text-right">Est. Pay</th>
+                                    <th class="py-3.5 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="shifts-table-body" class="divide-y divide-space-700/60 text-sm"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ==================== TAB 2: ADMIN TEAM DIRECTORY & ROLE MANAGEMENT ==================== -->
+            <div id="section-team" class="hidden space-y-6">
+                <div class="pulse-card rounded-[2rem] p-6 sm:p-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-space-700">
+                        <div>
+                            <h1 class="font-display text-2xl font-extrabold text-pulse-textMain">Team Directory &amp; Role Permissions</h1>
+                            <p class="text-sm text-pulse-textSub mt-1">
+                                Manage <span class="text-pulse-terra font-bold">Admin</span> vs. <span class="text-pulse-cyan font-bold">Employee</span> access and optional hourly rates (<span class="font-mono text-pulse-cyan">N/A</span> when blank). New team members can sign up on the login screen and appear here automatically.
+                            </p>
+                        </div>
+                        <button type="button" onclick="loadCloudData()" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-space-850 hover:bg-space-800 border border-space-700 text-xs font-bold text-pulse-cyan cursor-pointer">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            <span>Sync Cloud Profiles</span>
+                        </button>
+                    </div>
+
+                    <div id="team-directory-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-6"></div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ==================== MODAL 1: ACTIVE BREAK ALERT & WEB AUDIO CHIME ==================== -->
+    <div id="break-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div class="pulse-card pulse-glow-border rounded-[2rem] w-full max-w-md p-6 sm:p-8 text-center relative">
+            <button type="button" onclick="closeBreakModal()" class="absolute top-5 right-5 text-pulse-textSub hover:text-pulse-textMain p-1.5 rounded-full bg-space-950 border border-space-700 cursor-pointer">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+
+            <div class="w-14 h-14 rounded-full bg-pulse-terra/20 border border-pulse-terra/45 flex items-center justify-center mx-auto mb-4 text-pulse-terra">
+                <i data-lucide="coffee" class="w-7 h-7"></i>
+            </div>
+
+            <span class="text-xs font-bold uppercase tracking-widest text-pulse-cyan">Active Break Reminder</span>
+            <h3 class="font-display text-2xl font-extrabold text-pulse-textMain mt-1">It is Time to Take a Break!</h3>
+            <p class="text-xs sm:text-sm text-pulse-textSub mt-1.5">
+                Step away from your desk, stretch, and rest your eyes. Select your break duration:
+            </p>
+
+            <!-- Step 1: Select Break Duration -->
+            <div id="break-step-choose" class="mt-6 space-y-4">
+                <div class="grid grid-cols-3 gap-2.5">
+                    <button type="button" onclick="startBreakCountdown(5)" class="py-3 rounded-2xl bg-space-950 hover:bg-pulse-cyan hover:text-space-950 border border-space-700 font-display font-bold text-sm text-pulse-textMain transition-all cursor-pointer">
+                        5 min
+                    </button>
+                    <button type="button" onclick="startBreakCountdown(10)" class="py-3 rounded-2xl bg-space-950 hover:bg-pulse-cyan hover:text-space-950 border border-space-700 font-display font-bold text-sm text-pulse-textMain transition-all cursor-pointer">
+                        10 min
+                    </button>
+                    <button type="button" onclick="startBreakCountdown(15)" class="py-3 rounded-2xl bg-space-950 hover:bg-pulse-cyan hover:text-space-950 border border-space-700 font-display font-bold text-sm text-pulse-textMain transition-all cursor-pointer">
+                        15 min
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="number" id="custom-break-minutes" min="1" max="120" value="7" placeholder="Custom mins" class="flex-1 rounded-full bg-space-950 border border-space-700 focus:border-pulse-terra px-4 py-2.5 text-sm text-pulse-textMain text-center font-bold focus:outline-none">
+                    <button type="button" onclick="startCustomBreakCountdown()" class="px-5 py-2.5 rounded-full bg-pulse-terra hover:bg-pulse-terraLight text-space-950 font-extrabold text-xs transition-colors cursor-pointer">
+                        Start Custom
+                    </button>
+                </div>
+
+                <button type="button" onclick="closeBreakModal()" class="text-xs text-pulse-textMuted hover:text-pulse-textMain underline pt-1 cursor-pointer">
+                    Dismiss &amp; Continue Working
+                </button>
+            </div>
+
+            <!-- Step 2: Live Break Countdown + Alarm Controls -->
+            <div id="break-step-timer" class="hidden mt-6 space-y-5">
+                <div class="relative w-44 h-44 mx-auto flex items-center justify-center">
+                    <svg viewBox="0 0 160 160" class="w-full h-full">
+                        <circle cx="80" cy="80" r="68" fill="none" stroke="#161B26" stroke-width="10" />
+                        <circle id="break-ring-progress" cx="80" cy="80" r="68" fill="none" stroke="#D97757" stroke-width="10" stroke-linecap="round" transform="rotate(-90 80 80)" stroke-dasharray="427.25" stroke-dashoffset="0" />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span id="break-countdown-clock" class="font-mono text-3xl font-bold text-pulse-textMain tabular-nums">05:00</span>
+                        <span id="break-countdown-caption" class="text-[11px] font-bold text-pulse-terra mt-0.5">Break in progress...</span>
+                    </div>
+                </div>
+
+                <button type="button" id="stop-alarm-btn" onclick="stopAlarmAndCloseBreak()" class="w-full py-3.5 px-6 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-extrabold text-sm transition-all shadow-lg shadow-pulse-cyan/20 cursor-pointer">
+                    Stop Alarm &amp; Back to Work
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 2: + LOG PAST SHIFT ==================== -->
+    <div id="past-shift-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div class="pulse-card rounded-[2rem] w-full max-w-lg p-6 sm:p-8">
+            <div class="flex items-center justify-between pb-4 border-b border-space-700">
+                <h3 class="font-display text-lg font-extrabold text-pulse-textMain">+ Log Past Shift</h3>
+                <button type="button" onclick="closePastShiftModal()" class="text-pulse-textSub hover:text-pulse-textMain p-1 rounded-full cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleSavePastShift(event)" class="space-y-4 mt-5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div id="past-shift-emp-wrap" class="hidden">
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">Employee</label>
+                        <select id="past-shift-emp" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none"></select>
+                    </div>
+                    <div id="past-shift-date-wrap" class="sm:col-span-2">
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">Shift Date</label>
+                        <input type="date" id="past-shift-date" required class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Shift Category</label>
+                    <select id="past-shift-category" onchange="handleModalCategoryChange()" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                        <option value="Regular Shift">Regular Shift</option>
+                        <option value="Project Work">Project Work</option>
+                        <option value="Client Meeting">Client Meeting</option>
+                        <option value="Admin & Ops">Admin &amp; Ops</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div id="modal-other-label-box" class="hidden">
+                    <label class="block text-xs font-bold text-pulse-terra mb-1">Custom "Other" Activity Label</label>
+                    <input type="text" id="past-shift-custom-label" placeholder="e.g., Afternoon Site Inspection" class="w-full rounded-2xl bg-space-950 border border-pulse-terra/45 px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">Start Time</label>
+                        <input type="time" id="past-shift-start" value="09:00" required class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">End Time</label>
+                        <input type="time" id="past-shift-end" value="17:00" required class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Notes (Optional)</label>
+                    <input type="text" id="past-shift-notes" placeholder="Optional shift details..." class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-space-700">
+                    <button type="button" onclick="closePastShiftModal()" class="px-4 py-2 rounded-full border border-space-700 text-xs font-semibold text-pulse-textSub hover:text-pulse-textMain cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" id="save-past-shift-btn" class="px-6 py-2.5 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-extrabold text-xs cursor-pointer">
+                        Save Shift
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 3: ADMIN EDIT PROFILE / ROLE / RATE ==================== -->
+    <div id="edit-profile-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div class="pulse-card rounded-[2rem] w-full max-w-md p-6 sm:p-8">
+            <div class="flex items-center justify-between pb-4 border-b border-space-700">
+                <h3 class="font-display text-lg font-extrabold text-pulse-textMain">Edit Team Member</h3>
+                <button type="button" onclick="closeEditProfileModal()" class="text-pulse-textSub hover:text-pulse-textMain p-1 rounded-full cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleUpdateProfile(event)" class="space-y-4 mt-5">
+                <input type="hidden" id="edit-profile-id">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">First Name</label>
+                        <input type="text" id="edit-profile-first" required class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-pulse-textMain mb-1">Last Name</label>
+                        <input type="text" id="edit-profile-last" required class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Phone Number</label>
+                    <input type="tel" id="edit-profile-phone" required class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Access Role</label>
+                    <select id="edit-profile-role" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-terra px-3.5 py-2.5 text-sm font-semibold text-pulse-textMain focus:outline-none">
+                        <option value="employee">Employee (Own Data &amp; Own Reports Only)</option>
+                        <option value="admin">Admin (Full Team &amp; Reports Access)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Hourly Rate ($/hr) <span class="text-pulse-textMuted font-normal">(Optional — blank = N/A)</span></label>
+                    <input type="number" step="0.01" min="0" id="edit-profile-rate" placeholder="N/A" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-3.5 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-space-700">
+                    <button type="button" onclick="closeEditProfileModal()" class="px-4 py-2 rounded-full border border-space-700 text-xs font-semibold text-pulse-textSub hover:text-pulse-textMain cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-extrabold text-xs cursor-pointer">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 4: WEEKLY PDF "REPORTS" ==================== -->
+    <div id="reports-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div class="pulse-card pulse-glow-border rounded-[2rem] w-full max-w-md p-6 sm:p-8">
+            <div class="flex items-center justify-between pb-4 border-b border-space-700">
+                <div class="flex items-center gap-2.5">
+                    <i data-lucide="file-text" class="w-5 h-5 text-pulse-cyan"></i>
+                    <h3 class="font-display text-lg font-extrabold text-pulse-textMain">Weekly PDF Reports</h3>
+                </div>
+                <button type="button" onclick="closeReportsModal()" class="text-pulse-textSub hover:text-pulse-textMain p-1 rounded-full cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 mt-5">
+                <div id="report-emp-selector-wrap">
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Select Employee</label>
+                    <select id="report-employee-select" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-4 py-2.5 text-sm text-pulse-textMain focus:outline-none"></select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-pulse-textMain mb-1">Week Starting (Monday)</label>
+                    <input type="date" id="report-week-start" class="w-full rounded-2xl bg-space-950 border border-space-700 focus:border-pulse-cyan px-4 py-2.5 text-sm text-pulse-textMain focus:outline-none">
+                </div>
+
+                <div class="p-3.5 rounded-2xl bg-space-950 border border-space-700 text-xs text-pulse-textSub space-y-1">
+                    <p class="text-pulse-textMain font-bold">Report Summary Contents:</p>
+                    <p>• PayPulse Header &amp; Employee Contact Details</p>
+                    <p>• Daily Shift Breakdown &amp; Total Weekly Hours</p>
+                    <p>• Hourly Rate &amp; Estimated Gross Pay (<span class="text-pulse-cyan font-mono">N/A</span> when rate is not set)</p>
+                </div>
+
+                <button type="button" onclick="generateWeeklyPDFReport()" class="w-full py-3.5 px-6 rounded-full bg-pulse-cyan hover:bg-sky-300 text-space-950 font-display font-extrabold text-sm transition-all shadow-lg shadow-pulse-cyan/20 flex items-center justify-center gap-2 cursor-pointer">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span>Download Weekly PDF</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== APPLICATION LOGIC & SUPABASE INTEGRATION ==================== -->
+    <script>
+        // ============================================================
+        // 1. SUPABASE CLIENT CONFIGURATION
+        // ============================================================
+        const SUPABASE_URL = 'https://gaemmyxusmpwrjmyhqhe.supabase.co';
+        const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_TtCY8RZhiLJtoiHpLIEmvA_sQGZYcWR';
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+        // ============================================================
+        // 2. APPLICATION STATE
+        // ============================================================
+        let currentUser = null;
+        let currentProfile = null;
+        let allProfiles = [];
+        let allShifts = [];
+
+        let adminScope = 'all'; // 'all' | 'mine'
+        let selectedDialMinutes = 90; // 15..720 in 15m steps, or 0 for Open Count-Up
+        let activeSession = null; // { startedAt: number, targetMinutes: number, category: string, customLabel: string, notes: string }
+
+        let breakReminderMinutes = 45;
+        let lastBreakAlertMinuteMark = 0;
+        let isDraggingDial = false;
+
+        let mainTicker = null;
+        let breakTimerInterval = null;
+        let alarmAudioCtx = null;
+        let alarmLoopTimer = null;
+
+        // ============================================================
+        // 3. STARFIELD CANVAS BACKGROUND
+        // ============================================================
+        function initStarfield() {
+            const canvas = document.getElementById('starfield-canvas');
+            const ctx = canvas.getContext('2d');
+            let stars = [];
+
+            function resize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                stars = Array.from({ length: 140 }, () => ({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    r: Math.random() * 1.3 + 0.25,
+                    alpha: Math.random() * 0.55 + 0.12,
+                    twinkle: (Math.random() - 0.5) * 0.012
+                }));
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                for (const s of stars) {
+                    s.alpha += s.twinkle;
+                    if (s.alpha > 0.7 || s.alpha < 0.08) s.twinkle *= -1;
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(212, 212, 212, ${s.alpha})`;
+                    ctx.fill();
+                }
+                requestAnimationFrame(draw);
+            }
+
+            window.addEventListener('resize', resize);
+            resize();
+            draw();
+        }
+
+        // ============================================================
+        // 4. SUPABASE AUTHENTICATION (SIGN IN, CREATE ACCOUNT, SIGN OUT)
+        // ============================================================
+        function switchAuthTab(tab) {
+            const signInForm = document.getElementById('signin-form');
+            const signUpForm = document.getElementById('signup-form');
+            const tabIn = document.getElementById('auth-tab-signin');
+            const tabUp = document.getElementById('auth-tab-signup');
+
+            if (tab === 'signin') {
+                signInForm.classList.remove('hidden');
+                signUpForm.classList.add('hidden');
+                tabIn.className = 'py-2 rounded-full text-xs font-bold bg-pulse-cyan text-space-950 transition-all cursor-pointer';
+                tabUp.className = 'py-2 rounded-full text-xs font-bold text-pulse-textSub hover:text-pulse-textMain transition-all cursor-pointer';
+            } else {
+                signInForm.classList.add('hidden');
+                signUpForm.classList.remove('hidden');
+                tabUp.className = 'py-2 rounded-full text-xs font-bold bg-pulse-cyan text-space-950 transition-all cursor-pointer';
+                tabIn.className = 'py-2 rounded-full text-xs font-bold text-pulse-textSub hover:text-pulse-textMain transition-all cursor-pointer';
+            }
+        }
+
+        async function handleSignIn(e) {
+            e.preventDefault();
+            const btn = document.getElementById('signin-submit-btn');
+            const email = document.getElementById('signin-email').value.trim();
+            const password = document.getElementById('signin-password').value;
+
+            btn.disabled = true;
+            btn.textContent = 'Signing In...';
+
+            try {
+                const { data, error } = await sb.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                await initializeAuthenticatedSession(data.user);
+                showToast('Welcome back to PayPulse!', 'success');
+            } catch (err) {
+                showToast(err.message || 'Sign in failed. Please check your credentials.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign In to Workspace';
+            }
+        }
+
+        async function handleSignUp(e) {
+            e.preventDefault();
+            const btn = document.getElementById('signup-submit-btn');
+            const firstName = document.getElementById('signup-first').value.trim();
+            const lastName = document.getElementById('signup-last').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const phone = document.getElementById('signup-phone').value.trim();
+            const password = document.getElementById('signup-password').value;
+            const rateRaw = document.getElementById('signup-rate').value.trim();
+
+            btn.disabled = true;
+            btn.textContent = 'Creating Account...';
+
+            try {
+                const { data, error } = await sb.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            first_name: firstName,
+                            last_name: lastName,
+                            phone: phone,
+                            role: 'employee',
+                            hourly_rate: rateRaw !== '' ? rateRaw : ''
+                        }
+                    }
+                });
+
+                if (error) throw error;
+
+                if (data.session && data.user) {
+                    await initializeAuthenticatedSession(data.user);
+                    showToast(`Account created! Welcome, ${firstName}.`, 'success');
+                } else {
+                    showToast('Account created! Please check your email or sign in.', 'success');
+                    switchAuthTab('signin');
+                }
+            } catch (err) {
+                showToast(err.message || 'Unable to create account.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+            }
+        }
+
+        async function handleSignOut() {
+            await sb.auth.signOut();
+            currentUser = null;
+            currentProfile = null;
+            allProfiles = [];
+            allShifts = [];
+            activeSession = null;
+            document.getElementById('app-shell').classList.add('hidden');
+            document.getElementById('auth-screen').classList.remove('hidden');
+            showToast('Signed out successfully.', 'info');
+        }
+
+        async function initializeAuthenticatedSession(user) {
+            currentUser = user;
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-shell').classList.remove('hidden');
+
+            await loadCloudData();
+        }
+
+        // ============================================================
+        // 5. LOAD & SYNC CLOUD PROFILES & SHIFTS FROM SUPABASE
+        // ============================================================
+        async function loadCloudData() {
+            if (!currentUser) return;
+
+            try {
+                // Fetch current user's profile
+                let { data: myProf, error: profErr } = await sb
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', currentUser.id)
+                    .single();
+
+                // Fallback profile creation if trigger hadn't run yet
+                if (profErr || !myProf) {
+                    const meta = currentUser.user_metadata || {};
+                    const fallbackProfile = {
+                        id: currentUser.id,
+                        first_name: meta.first_name || 'Team',
+                        last_name: meta.last_name || 'Member',
+                        email: currentUser.email,
+                        phone: meta.phone || 'Not provided',
+                        role: meta.role || 'employee',
+                        hourly_rate: meta.hourly_rate ? Number(meta.hourly_rate) : null
+                    };
+                    await sb.from('profiles').upsert(fallbackProfile);
+                    myProf = fallbackProfile;
+                }
+
+                currentProfile = myProf;
+
+                // Fetch profiles (RLS returns all profiles for admin, or only own profile for employee)
+                const { data: profilesList } = await sb
+                    .from('profiles')
+                    .select('*')
+                    .order('first_name', { ascending: true });
+                allProfiles = profilesList || [currentProfile];
+
+                // Fetch shifts (RLS returns all shifts for admin, or only own shifts for employee)
+                const { data: shiftsList, error: shiftErr } = await sb
+                    .from('shifts')
+                    .select('*')
+                    .order('shift_date', { ascending: false })
+                    .order('created_at', { ascending: false });
+
+                if (shiftErr) throw shiftErr;
+                allShifts = shiftsList || [];
+
+                applyRoleBasedUI();
+                renderDashboard();
+            } catch (err) {
+                console.error('Supabase sync error:', err);
+                showToast('Error syncing data from Supabase.', 'error');
+            }
+        }
+
+        function isAdmin() {
+            return currentProfile && currentProfile.role === 'admin';
+        }
+
+        function applyRoleBasedUI() {
+            const admin = isAdmin();
+
+            // Header User Name & Role Pill
+            document.getElementById('header-user-name').textContent = `${currentProfile.first_name} ${currentProfile.last_name}`;
+            const rolePill = document.getElementById('header-role-pill');
+            if (admin) {
+                rolePill.textContent = 'ADMIN';
+                rolePill.className = 'text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-pulse-terra/20 text-pulse-terra border border-pulse-terra/40';
+            } else {
+                rolePill.textContent = 'EMPLOYEE';
+                rolePill.className = 'text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-pulse-cyan/15 text-pulse-cyan border border-pulse-cyan/35';
+            }
+
+            // Admin-Only Toggle & Directory Navigation
+            const scopeToggle = document.getElementById('admin-scope-toggle-wrap');
+            const adminTabs = document.getElementById('admin-nav-tabs');
+            const empFilter = document.getElementById('filter-employee-select');
+
+            if (admin) {
+                scopeToggle.classList.remove('hidden');
+                scopeToggle.classList.add('flex');
+                adminTabs.classList.remove('hidden');
+                adminTabs.classList.add('flex');
+                empFilter.classList.remove('hidden');
+            } else {
+                scopeToggle.classList.add('hidden');
+                scopeToggle.classList.remove('flex');
+                adminTabs.classList.add('hidden');
+                adminTabs.classList.remove('flex');
+                empFilter.classList.add('hidden');
+                adminScope = 'mine';
+                switchMainTab('tracker');
+            }
+
+            // Rate pill in workspace banner
+            document.getElementById('banner-rate-pill').textContent = formatRateDisplay(currentProfile.hourly_rate);
+            document.getElementById('dial-center-user').textContent = `${currentProfile.first_name} ${currentProfile.last_name}`;
+
+            updateScopeBanner();
+        }
+
+        function setAdminScope(scope) {
+            if (!isAdmin()) return;
+            adminScope = scope;
+
+            const btnAll = document.getElementById('scope-btn-all');
+            const btnMine = document.getElementById('scope-btn-mine');
+            const empFilter = document.getElementById('filter-employee-select');
+
+            if (scope === 'all') {
+                btnAll.className = 'px-3.5 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer bg-pulse-cyan text-space-950 shadow-sm';
+                btnMine.className = 'px-3.5 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer text-pulse-textSub hover:text-pulse-textMain';
+                empFilter.value = 'ALL';
+            } else {
+                btnMine.className = 'px-3.5 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer bg-pulse-cyan text-space-950 shadow-sm';
+                btnAll.className = 'px-3.5 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer text-pulse-textSub hover:text-pulse-textMain';
+                empFilter.value = currentProfile.id;
+            }
+
+            updateScopeBanner();
+            renderDashboard();
+        }
+
+        function updateScopeBanner() {
+            const title = document.getElementById('banner-title');
+            const sub = document.getElementById('banner-subtitle');
+
+            if (isAdmin() && adminScope === 'all') {
+                title.textContent = `Admin Workspace — All Employees (${allProfiles.length})`;
+                sub.textContent = 'Viewing consolidated team hours, employee directory & team PDF reports';
+            } else {
+                title.textContent = `Personal Workspace — ${currentProfile.first_name} ${currentProfile.last_name}`;
+                sub.textContent = 'Your personal time tracker, active break timer & weekly PDF reports';
+            }
+        }
+
+        // ============================================================
+        // 6. INTERACTIVE RADIAL TIME SELECTOR WHEEL ("ORBIT DIAL")
+        // ============================================================
+        function buildDialTicks() {
+            const ticksGroup = document.getElementById('dial-ticks-group');
+            const totalTicks = 48;
+            const cx = 140, cy = 140;
+            let html = '';
+
+            for (let i = 0; i < totalTicks; i++) {
+                const angleDeg = (i * 360) / totalTicks - 90;
+                const rad = (angleDeg * Math.PI) / 180;
+                const isMajor = i % 4 === 0;
+                const rInner = isMajor ? 112 : 115;
+                const rOuter = 122;
+
+                const x1 = cx + rInner * Math.cos(rad);
+                const y1 = cy + rInner * Math.sin(rad);
+                const x2 = cx + rOuter * Math.cos(rad);
+                const y2 = cy + rOuter * Math.sin(rad);
+
+                html += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${isMajor ? '#737373' : '#262C3A'}" stroke-width="${isMajor ? '2' : '1.2'}" stroke-linecap="round" />`;
+            }
+            ticksGroup.innerHTML = html;
+        }
+
+        function initDialInteractions() {
+            const svg = document.getElementById('orbit-dial-svg');
+
+            function updateDialFromPointer(clientX, clientY) {
+                if (activeSession) return;
+
+                const rect = svg.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const dx = clientX - cx;
+                const dy = clientY - cy;
+
+                let deg = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+                if (deg < 0) deg += 360;
+
+                let mins = Math.round(((deg / 360) * 720) / 15) * 15;
+                if (mins < 15) mins = 15;
+                if (mins > 720) mins = 720;
+
+                selectedDialMinutes = mins;
+                renderDialVisuals();
+            }
+
+            svg.addEventListener('pointerdown', (e) => {
+                if (activeSession) return;
+                isDraggingDial = true;
+                svg.setPointerCapture(e.pointerId);
+                updateDialFromPointer(e.clientX, e.clientY);
+            });
+
+            svg.addEventListener('pointermove', (e) => {
+                if (!isDraggingDial) return;
+                updateDialFromPointer(e.clientX, e.clientY);
+            });
+
+            svg.addEventListener('pointerup', (e) => {
+                if (isDraggingDial) {
+                    isDraggingDial = false;
+                    svg.releasePointerCapture(e.pointerId);
+                }
+            });
+        }
+
+        function setDialDuration(minutes) {
+            if (activeSession) return;
+            selectedDialMinutes = minutes;
+            renderDialVisuals();
+        }
+
+        function renderDialVisuals() {
+            const radius = 102;
+            const circumference = 2 * Math.PI * radius;
+            const arc = document.getElementById('dial-progress-arc');
+            const knobGroup = document.getElementById('dial-knob-group');
+            const knob = document.getElementById('dial-knob');
+            const knobHalo = document.getElementById('dial-knob-halo');
+
+            const readout = document.getElementById('dial-primary-readout');
+            const endPill = document.getElementById('dial-end-time-pill');
+            const centerBadge = document.getElementById('dial-center-badge');
+            const centerSub = document.getElementById('dial-center-sub');
+            const statusChip = document.getElementById('dial-status-chip');
+
+            const idleControls = document.getElementById('dial-idle-controls');
+            const activeControls = document.getElementById('dial-active-controls');
+            const presetsRow = document.getElementById('dial-presets-row');
+
+            if (activeSession) {
+                knobGroup.classList.add('hidden');
+                presetsRow.classList.add('hidden');
+                idleControls.classList.add('hidden');
+                activeControls.classList.remove('hidden');
+
+                const elapsedSec = Math.max(0, Math.floor((Date.now() - activeSession.startedAt) / 1000));
+                let fraction = 0;
+
+                if (activeSession.targetMinutes > 0) {
+                    const targetSec = activeSession.targetMinutes * 60;
+                    const remainingSec = Math.max(0, targetSec - elapsedSec);
+                    fraction = Math.min(1, remainingSec / targetSec);
+
+                    readout.textContent = formatClockSeconds(remainingSec);
+                    const endDate = new Date(activeSession.startedAt + targetSec * 1000);
+                    endPill.textContent = `Ends today at ${formatTime12h(endDate)}`;
+                    centerBadge.textContent = 'LIVE SESSION';
+                    statusChip.textContent = 'Session Active';
+                } else {
+                    fraction = (elapsedSec % 3600) / 3600;
+                    readout.textContent = formatClockSeconds(elapsedSec);
+                    endPill.textContent = `Open Count-Up • Started ${formatTime12h(new Date(activeSession.startedAt))}`;
+                    centerBadge.textContent = 'COUNT-UP LIVE';
+                    statusChip.textContent = 'Open Timer Running';
+                }
+
+                arc.setAttribute('stroke-dasharray', circumference);
+                arc.setAttribute('stroke-dashoffset', circumference * (1 - fraction));
+                centerSub.textContent = activeSession.category === 'Other' && activeSession.customLabel
+                    ? activeSession.customLabel
+                    : activeSession.category;
+                return;
+            }
+
+            // Idle Mode
+            knobGroup.classList.remove('hidden');
+            presetsRow.classList.remove('hidden');
+            idleControls.classList.remove('hidden');
+            activeControls.classList.add('hidden');
+            statusChip.textContent = 'Ready to Track';
+
+            const fraction = selectedDialMinutes === 0 ? 1 : Math.min(1, selectedDialMinutes / 720);
+            readout.textContent = formatHumanDuration(selectedDialMinutes);
+
+            if (selectedDialMinutes === 0) {
+                endPill.textContent = 'Counts upward until you click Finish & Save';
+                document.getElementById('start-session-label').textContent = 'Start Open Count-Up Session';
+            } else {
+                const endObj = new Date(Date.now() + selectedDialMinutes * 60000);
+                endPill.textContent = `Ends today at ${formatTime12h(endObj)}`;
+                document.getElementById('start-session-label').textContent = `Start Session (${formatHumanDuration(selectedDialMinutes)})`;
+            }
+
+            centerBadge.textContent = 'DRAG WHEEL';
+            centerSub.textContent = '15m – 12h increments';
+
+            arc.setAttribute('stroke-dasharray', circumference);
+            arc.setAttribute('stroke-dashoffset', circumference * (1 - fraction));
+
+            const angleRad = (fraction * 360 - 90) * (Math.PI / 180);
+            const kx = 140 + radius * Math.cos(angleRad);
+            const ky = 140 + radius * Math.sin(angleRad);
+            knob.setAttribute('cx', kx.toFixed(1));
+            knob.setAttribute('cy', ky.toFixed(1));
+            knobHalo.setAttribute('cx', kx.toFixed(1));
+            knobHalo.setAttribute('cy', ky.toFixed(1));
+        }
+
+        // ============================================================
+        // 7. SHIFT CATEGORIES ("OTHER" CUSTOM RANGE) & LIVE SESSION SAVE
+        // ============================================================
+        function handleDialCategoryChange() {
+            const cat = document.getElementById('dial-category').value;
+            const panel = document.getElementById('dial-other-panel');
+            panel.classList.toggle('hidden', cat !== 'Other');
+            if (cat === 'Other') updateOtherDurationPreview();
+        }
+
+        function updateOtherDurationPreview() {
+            const start = document.getElementById('dial-other-start').value || '14:00';
+            const end = document.getElementById('dial-other-end').value || '16:00';
+            const mins = computeMinutesBetween(start, end);
+            document.getElementById('dial-other-calc-badge').textContent = `${formatHumanDuration(mins)} (${(mins / 60).toFixed(2)} hrs)`;
+        }
+
+        function applyOtherRangeToDial() {
+            if (activeSession) {
+                showToast('Finish your current active session first.', 'info');
+                return;
+            }
+            const start = document.getElementById('dial-other-start').value || '14:00';
+            const end = document.getElementById('dial-other-end').value || '16:00';
+            const mins = computeMinutesBetween(start, end);
+            if (mins <= 0) {
+                showToast('End time must be after start time.', 'error');
+                return;
+            }
+            selectedDialMinutes = Math.min(720, Math.max(15, mins));
+            renderDialVisuals();
+            showToast(`Orbit Dial set to ${formatHumanDuration(selectedDialMinutes)}.`, 'success');
+        }
+
+        async function logOtherBlockDirectly() {
+            const start = document.getElementById('dial-other-start').value;
+            const end = document.getElementById('dial-other-end').value;
+            const customLabel = document.getElementById('dial-other-label').value.trim() || 'Custom Scheduled Block';
+            const notes = document.getElementById('dial-notes').value.trim();
+
+            if (!start || !end) {
+                showToast('Please select both Start Time and End Time.', 'error');
+                return;
+            }
+
+            const durationMins = computeMinutesBetween(start, end);
+            if (durationMins <= 0) {
+                showToast('End Time must be later than Start Time.', 'error');
+                return;
+            }
+
+            try {
+                const { error } = await sb.from('shifts').insert({
+                    user_id: currentProfile.id,
+                    shift_date: getTodayISO(),
+                    category: 'Other',
+                    custom_label: customLabel,
+                    start_time: format24To12String(start),
+                    end_time: format24To12String(end),
+                    duration_seconds: durationMins * 60,
+                    notes: notes || `${format24To12String(start)} – ${format24To12String(end)}`
+                });
+
+                if (error) throw error;
+
+                document.getElementById('dial-other-label').value = '';
+                document.getElementById('dial-notes').value = '';
+                await loadCloudData();
+                showToast(`Saved "Other" block (${format24To12String(start)} – ${format24To12String(end)}).`, 'success');
+            } catch (err) {
+                showToast(err.message || 'Failed to save custom block.', 'error');
+            }
+        }
+
+        function startWorkSession() {
+            if (activeSession) return;
+            const category = document.getElementById('dial-category').value;
+            const customLabel = document.getElementById('dial-other-label').value.trim();
+            const notes = document.getElementById('dial-notes').value.trim();
+
+            activeSession = {
+                startedAt: Date.now(),
+                targetMinutes: selectedDialMinutes,
+                category,
+                customLabel: category === 'Other' ? (customLabel || 'Custom Activity') : '',
+                notes
+            };
+            lastBreakAlertMinuteMark = 0;
+            renderDialVisuals();
+            showToast('Work session started!', 'success');
+        }
+
+        function extendActiveSession(extraMinutes) {
+            if (!activeSession) return;
+            activeSession.targetMinutes = (activeSession.targetMinutes || 0) + extraMinutes;
+            renderDialVisuals();
+            showToast(`Added +${extraMinutes} minutes to current session.`, 'info');
+        }
+
+        async function finishAndSaveSession() {
+            if (!activeSession) return;
+            const btn = document.getElementById('finish-session-btn');
+            btn.disabled = true;
+
+            const startObj = new Date(activeSession.startedAt);
+            const endObj = new Date();
+            const durationSec = Math.max(60, Math.floor((endObj - startObj) / 1000));
+
+            try {
+                const { error } = await sb.from('shifts').insert({
+                    user_id: currentProfile.id,
+                    shift_date: formatDateToISO(startObj),
+                    category: activeSession.category,
+                    custom_label: activeSession.customLabel || null,
+                    start_time: formatTime12h(startObj),
+                    end_time: formatTime12h(endObj),
+                    duration_seconds: durationSec,
+                    notes: activeSession.notes || 'Tracked via PayPulse Orbit Dial'
+                });
+
+                if (error) throw error;
+
+                activeSession = null;
+                document.getElementById('dial-notes').value = '';
+                renderDialVisuals();
+                await loadCloudData();
+                showToast('Session completed and saved to cloud!', 'success');
+            } catch (err) {
+                showToast(err.message || 'Error saving session.', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // ============================================================
+        // 8. ACTIVE BREAK REMINDERS & SYNTHESIZED WEB AUDIO ALARM
+        // ============================================================
+        function handleBreakIntervalSelect(val) {
+            const customWrap = document.getElementById('custom-break-interval-wrap');
+            if (val === 'custom') {
+                customWrap.classList.remove('hidden');
+                setBreakReminderInterval(document.getElementById('custom-break-interval-input').value);
+            } else {
+                customWrap.classList.add('hidden');
+                setBreakReminderInterval(val);
+            }
+        }
+
+        function setBreakReminderInterval(val) {
+            breakReminderMinutes = parseInt(val, 10) || 0;
+            const statusEl = document.getElementById('break-countdown-status');
+            statusEl.textContent = breakReminderMinutes > 0 ? `Every ${breakReminderMinutes}m` : 'Disabled';
+        }
+
+        function openActiveBreakModal(isTest = false) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('PayPulse — Active Break', {
+                    body: 'It is Time to Take a Break! Choose your break length.'
+                });
+            } else if ('Notification' in window && Notification.permission !== 'denied') {
+                Notification.requestPermission();
+            }
+
+            document.getElementById('break-step-choose').classList.remove('hidden');
+            document.getElementById('break-step-timer').classList.add('hidden');
+            const modal = document.getElementById('break-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            if (isTest) {
+                showToast('Previewing Active Break alert!', 'info');
+            }
+        }
+
+        function startCustomBreakCountdown() {
+            const mins = parseInt(document.getElementById('custom-break-minutes').value, 10);
+            if (!mins || mins < 1) {
+                showToast('Please enter at least 1 minute.', 'error');
+                return;
+            }
+            startBreakCountdown(mins);
+        }
+
+        function startBreakCountdown(minutes) {
+            stopAlarmChime();
+            clearInterval(breakTimerInterval);
+
+            document.getElementById('break-step-choose').classList.add('hidden');
+            document.getElementById('break-step-timer').classList.remove('hidden');
+            document.getElementById('break-countdown-caption').textContent = `Resting (${minutes} min break)...`;
+            document.getElementById('stop-alarm-btn').textContent = 'End Break Early';
+
+            const totalSeconds = minutes * 60;
+            let remaining = totalSeconds;
+            const circumference = 2 * Math.PI * 68;
+            const arc = document.getElementById('break-ring-progress');
+
+            function updateRing() {
+                document.getElementById('break-countdown-clock').textContent = formatClockSeconds(remaining);
+                const frac = remaining / totalSeconds;
+                arc.setAttribute('stroke-dasharray', circumference);
+                arc.setAttribute('stroke-dashoffset', circumference * (1 - frac));
+            }
+
+            updateRing();
+
+            breakTimerInterval = setInterval(() => {
+                remaining--;
+                if (remaining <= 0) {
+                    remaining = 0;
+                    updateRing();
+                    clearInterval(breakTimerInterval);
+                    document.getElementById('break-countdown-caption').textContent = 'BREAK TIME COMPLETE!';
+                    document.getElementById('stop-alarm-btn').textContent = 'Stop Alarm & Back to Work';
+                    playSynthesizedChimeAlarm();
+                } else {
+                    updateRing();
+                }
+            }, 1000);
+        }
+
+        function playSynthesizedChimeAlarm() {
+            stopAlarmChime();
+            try {
+                alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const playChimeBurst = () => {
+                    if (!alarmAudioCtx) return;
+                    const now = alarmAudioCtx.currentTime;
+                    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 - E5 - G5 - C6
+                    notes.forEach((freq, idx) => {
+                        const osc = alarmAudioCtx.createOscillator();
+                        const gain = alarmAudioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + idx * 0.15);
+                        gain.gain.setValueAtTime(0.001, now + idx * 0.15);
+                        gain.gain.exponentialRampToValueAtTime(0.24, now + idx * 0.15 + 0.04);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.15 + 0.55);
+                        osc.connect(gain);
+                        gain.connect(alarmAudioCtx.destination);
+                        osc.start(now + idx * 0.15);
+                        osc.stop(now + idx * 0.15 + 0.6);
+                    });
+                };
+                playChimeBurst();
+                alarmLoopTimer = setInterval(playChimeBurst, 2200);
+            } catch (e) {
+                console.warn('Web Audio API blocked or unsupported:', e);
+            }
+        }
+
+        function stopAlarmChime() {
+            if (alarmLoopTimer) {
+                clearInterval(alarmLoopTimer);
+                alarmLoopTimer = null;
+            }
+            if (alarmAudioCtx) {
+                alarmAudioCtx.close().catch(() => {});
+                alarmAudioCtx = null;
+            }
+        }
+
+        function stopAlarmAndCloseBreak() {
+            stopAlarmChime();
+            clearInterval(breakTimerInterval);
+            closeBreakModal();
+            showToast('Welcome back! Active break finished.', 'success');
+        }
+
+        function closeBreakModal() {
+            stopAlarmChime();
+            clearInterval(breakTimerInterval);
+            const modal = document.getElementById('break-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // ============================================================
+        // 9. DASHBOARD RENDERING (KPIs, CHART, SHIFT TABLE, TEAM DIRECTORY)
+        // ============================================================
+        function renderDashboard() {
+            if (!currentProfile) return;
+
+            syncAdminDropdowns();
+            renderDialVisuals();
+            renderWeeklySummaryAndChart();
+            renderShiftsTable();
+            if (isAdmin()) renderTeamDirectory();
+            lucide.createIcons();
+        }
+
+        function syncAdminDropdowns() {
+            const empFilter = document.getElementById('filter-employee-select');
+            const prevVal = empFilter.value;
+
+            if (isAdmin()) {
+                empFilter.innerHTML = `<option value="ALL">All Employees (${allProfiles.length})</option>` +
+                    allProfiles.map(p => `<option value="${p.id}">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</option>`).join('');
+
+                if (adminScope === 'mine') {
+                    empFilter.value = currentProfile.id;
+                } else if (prevVal && (prevVal === 'ALL' || allProfiles.some(p => p.id === prevVal))) {
+                    empFilter.value = prevVal;
+                }
+            } else {
+                empFilter.innerHTML = `<option value="${currentProfile.id}">${escapeHtml(currentProfile.first_name)} ${escapeHtml(currentProfile.last_name)}</option>`;
+                empFilter.value = currentProfile.id;
+            }
+        }
+
+        function renderWeeklySummaryAndChart() {
+            const monISO = getMondayISO(0);
+            const sunISO = addDaysISO(monISO, 6);
+            document.getElementById('weekly-range-label').textContent = `Week of ${monISO} to ${sunISO}`;
+
+            const scopeUserId = (isAdmin() && adminScope === 'all') ? 'ALL' : currentProfile.id;
+
+            const weekShifts = allShifts.filter(s => {
+                const inWeek = s.shift_date >= monISO && s.shift_date <= sunISO;
+                const matchUser = scopeUserId === 'ALL' || s.user_id === scopeUserId;
+                return inWeek && matchUser;
+            });
+
+            let totalSeconds = 0;
+            let totalPay = 0;
+            let hasRate = false;
+
+            weekShifts.forEach(s => {
+                totalSeconds += (s.duration_seconds || 0);
+                const prof = allProfiles.find(p => p.id === s.user_id) || currentProfile;
+                if (prof && prof.hourly_rate !== null && prof.hourly_rate !== undefined && Number(prof.hourly_rate) > 0) {
+                    hasRate = true;
+                    totalPay += ((s.duration_seconds || 0) / 3600) * Number(prof.hourly_rate);
+                }
+            });
+
+            const totalHours = totalSeconds / 3600;
+            document.getElementById('kpi-total-hours').textContent = `${totalHours.toFixed(2)} hrs`;
+            document.getElementById('kpi-shift-count').textContent = `${weekShifts.length} shift${weekShifts.length === 1 ? '' : 's'} logged`;
+
+            if (hasRate) {
+                document.getElementById('kpi-estimated-pay').textContent = `$${totalPay.toFixed(2)}`;
+                document.getElementById('kpi-pay-note').textContent = 'Calculated from hourly rate';
+            } else {
+                document.getElementById('kpi-estimated-pay').textContent = 'N/A';
+                document.getElementById('kpi-pay-note').textContent = 'Hours-only mode (rate N/A)';
+            }
+
+            // Mon-Sun Bar Chart
+            const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const dailyData = Array.from({ length: 7 }, (_, i) => {
+                const dateStr = addDaysISO(monISO, i);
+                const secs = weekShifts
+                    .filter(s => s.shift_date === dateStr)
+                    .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+                return { label: dayNames[i], hours: secs / 3600, isToday: dateStr === getTodayISO() };
+            });
+
+            const maxH = Math.max(8, ...dailyData.map(d => d.hours));
+            document.getElementById('weekly-chart-bars').innerHTML = dailyData.map(d => {
+                const heightPct = Math.max(6, (d.hours / maxH) * 100);
+                return `
+                    <div class="flex-1 h-full flex flex-col justify-end items-center group relative">
+                        <span class="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-5 text-[10px] font-mono font-bold text-pulse-cyan">${d.hours.toFixed(1)}h</span>
+                        <div class="w-full max-w-[34px] rounded-t-xl transition-all duration-300 ${d.hours > 0 ? 'bg-gradient-to-t from-pulse-cyan to-pulse-terra' : 'bg-space-800'}" style="height: ${heightPct}%"></div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('weekly-chart-labels').innerHTML = dailyData.map(d => `
+                <span class="text-[11px] font-bold ${d.isToday ? 'text-pulse-cyan' : 'text-pulse-textMuted'}">${d.label}</span>
+            `).join('');
+        }
+
+        function renderShiftsTable() {
+            const empFilter = isAdmin() ? document.getElementById('filter-employee-select').value : currentProfile.id;
+            const weekFilter = document.getElementById('filter-week-select').value;
+            const catFilter = document.getElementById('filter-category-select').value;
+
+            let startISO = '2000-01-01';
+            let endISO = '2099-12-31';
+            if (weekFilter === 'current') {
+                startISO = getMondayISO(0);
+                endISO = addDaysISO(startISO, 6);
+            } else if (weekFilter === 'last') {
+                startISO = getMondayISO(-1);
+                endISO = addDaysISO(startISO, 6);
+            }
+
+            const filtered = allShifts
+                .filter(s => empFilter === 'ALL' || s.user_id === empFilter)
+                .filter(s => s.shift_date >= startISO && s.shift_date <= endISO)
+                .filter(s => catFilter === 'ALL' || s.category === catFilter);
+
+            const tbody = document.getElementById('shifts-table-body');
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-12 px-6 text-center text-pulse-textMuted text-xs">
+                            No shifts found for the selected filter. Use the Orbit Dial or click "+ Log Past Shift".
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(s => {
+                const prof = allProfiles.find(p => p.id === s.user_id) || currentProfile;
+                const hrs = (s.duration_seconds || 0) / 3600;
+                const payStr = computePayDisplay(prof?.hourly_rate, hrs);
+                const badgeClass = s.category === 'Other'
+                    ? 'bg-pulse-terra/15 text-pulse-terra border border-pulse-terra/35'
+                    : 'bg-pulse-cyan/15 text-pulse-cyan border border-pulse-cyan/35';
+                const catText = s.category === 'Other' && s.custom_label ? `Other: ${s.custom_label}` : s.category;
+                const timeWindow = (s.start_time && s.end_time) ? `${s.start_time} – ${s.end_time}` : 'Timed Session';
+
+                return `
+                    <tr class="hover:bg-space-800/50 transition-colors">
+                        <td class="py-3.5 px-6 font-bold text-pulse-textMain whitespace-nowrap">
+                            ${escapeHtml(prof.first_name)} ${escapeHtml(prof.last_name)}
+                        </td>
+                        <td class="py-3.5 px-4 text-pulse-textSub text-xs whitespace-nowrap">${s.shift_date}</td>
+                        <td class="py-3.5 px-4 font-mono text-xs text-pulse-textMain whitespace-nowrap">${escapeHtml(timeWindow)}</td>
+                        <td class="py-3.5 px-4">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${badgeClass}">${escapeHtml(catText)}</span>
+                                <span class="text-xs text-pulse-textSub truncate max-w-[200px]">${escapeHtml(s.notes || '')}</span>
+                            </div>
+                        </td>
+                        <td class="py-3.5 px-4 font-mono font-bold text-pulse-textMain whitespace-nowrap">${hrs.toFixed(2)} hrs</td>
+                        <td class="py-3.5 px-4 text-right font-mono text-xs ${payStr === 'N/A' ? 'text-pulse-textMuted' : 'text-pulse-cyan font-bold'} whitespace-nowrap">
+                            ${payStr}
+                        </td>
+                        <td class="py-3.5 px-6 text-right whitespace-nowrap">
+                            <button type="button" onclick="deleteShiftRecord('${s.id}')" class="p-1.5 rounded-full text-pulse-textSub hover:text-pulse-terra hover:bg-pulse-terra/10 cursor-pointer" title="Delete Shift">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function deleteShiftRecord(shiftId) {
+            try {
+                const { error } = await sb.from('shifts').delete().eq('id', shiftId);
+                if (error) throw error;
+                await loadCloudData();
+                showToast('Shift deleted.', 'info');
+            } catch (err) {
+                showToast(err.message || 'Unable to delete shift.', 'error');
+            }
+        }
+
+        function renderTeamDirectory() {
+            const grid = document.getElementById('team-directory-grid');
+            const monISO = getMondayISO(0);
+            const sunISO = addDaysISO(monISO, 6);
+
+            grid.innerHTML = allProfiles.map(prof => {
+                const weekSecs = allShifts
+                    .filter(s => s.user_id === prof.id && s.shift_date >= monISO && s.shift_date <= sunISO)
+                    .reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+                const weekHrs = weekSecs / 3600;
+                const isProfAdmin = prof.role === 'admin';
+                const rateText = formatRateDisplay(prof.hourly_rate);
+
+                return `
+                    <div class="p-5 rounded-3xl bg-space-950 border border-space-700 flex flex-col justify-between gap-4">
+                        <div>
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <h3 class="font-display font-bold text-base text-pulse-textMain">${escapeHtml(prof.first_name)} ${escapeHtml(prof.last_name)}</h3>
+                                    <span class="inline-block mt-1 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${isProfAdmin ? 'bg-pulse-terra/20 text-pulse-terra border border-pulse-terra/40' : 'bg-pulse-cyan/15 text-pulse-cyan border border-pulse-cyan/35'}">
+                                        ${isProfAdmin ? 'Admin' : 'Employee'}
+                                    </span>
+                                </div>
+                                <span class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-space-850 text-pulse-textMain border border-space-700">
+                                    ${rateText}
+                                </span>
+                            </div>
+
+                            <div class="mt-4 space-y-1.5 text-xs text-pulse-textSub">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="mail" class="w-3.5 h-3.5 text-pulse-cyan"></i>
+                                    <span class="truncate">${escapeHtml(prof.email)}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="phone" class="w-3.5 h-3.5 text-pulse-terra"></i>
+                                    <span>${escapeHtml(prof.phone || 'N/A')}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-space-700 flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] uppercase tracking-wider text-pulse-textMuted block">This Week</span>
+                                <span class="font-mono font-bold text-sm text-pulse-textMain">${weekHrs.toFixed(2)} hrs</span>
+                            </div>
+                            <button type="button" onclick="openEditProfileModal('${prof.id}')" class="px-3.5 py-1.5 rounded-full bg-space-850 hover:bg-space-800 border border-space-700 text-xs font-bold text-pulse-textMain cursor-pointer">
+                                Edit Role / Rate
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ============================================================
+        // 10. MODALS: + LOG PAST SHIFT & ADMIN EDIT PROFILE
+        // ============================================================
+        function openPastShiftModal() {
+            const empWrap = document.getElementById('past-shift-emp-wrap');
+            const dateWrap = document.getElementById('past-shift-date-wrap');
+            const empSelect = document.getElementById('past-shift-emp');
+
+            if (isAdmin()) {
+                empWrap.classList.remove('hidden');
+                dateWrap.classList.remove('sm:col-span-2');
+                empSelect.innerHTML = allProfiles.map(p =>
+                    `<option value="${p.id}" ${p.id === currentProfile.id ? 'selected' : ''}>${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</option>`
+                ).join('');
+            } else {
+                empWrap.classList.add('hidden');
+                dateWrap.classList.add('sm:col-span-2');
+            }
+
+            document.getElementById('past-shift-date').value = getTodayISO();
+            document.getElementById('past-shift-category').value = 'Regular Shift';
+            document.getElementById('past-shift-custom-label').value = '';
+            document.getElementById('past-shift-start').value = '09:00';
+            document.getElementById('past-shift-end').value = '17:00';
+            document.getElementById('past-shift-notes').value = '';
+            handleModalCategoryChange();
+
+            const modal = document.getElementById('past-shift-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePastShiftModal() {
+            const modal = document.getElementById('past-shift-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function handleModalCategoryChange() {
+            const cat = document.getElementById('past-shift-category').value;
+            document.getElementById('modal-other-label-box').classList.toggle('hidden', cat !== 'Other');
+        }
+
+        async function handleSavePastShift(e) {
+            e.preventDefault();
+            const btn = document.getElementById('save-past-shift-btn');
+            const targetUserId = isAdmin() ? document.getElementById('past-shift-emp').value : currentProfile.id;
+            const shiftDate = document.getElementById('past-shift-date').value;
+            const category = document.getElementById('past-shift-category').value;
+            const customLabel = document.getElementById('past-shift-custom-label').value.trim();
+            const startTime24 = document.getElementById('past-shift-start').value;
+            const endTime24 = document.getElementById('past-shift-end').value;
+            const notes = document.getElementById('past-shift-notes').value.trim();
+
+            const mins = computeMinutesBetween(startTime24, endTime24);
+            if (mins <= 0) {
+                showToast('End Time must be after Start Time.', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                const { error } = await sb.from('shifts').insert({
+                    user_id: targetUserId,
+                    shift_date: shiftDate,
+                    category,
+                    custom_label: category === 'Other' ? (customLabel || 'Custom Activity') : null,
+                    start_time: format24To12String(startTime24),
+                    end_time: format24To12String(endTime24),
+                    duration_seconds: mins * 60,
+                    notes
+                });
+
+                if (error) throw error;
+
+                closePastShiftModal();
+                await loadCloudData();
+                showToast('Past shift saved to database!', 'success');
+            } catch (err) {
+                showToast(err.message || 'Failed to save shift.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Shift';
+            }
+        }
+
+        function openEditProfileModal(profileId) {
+            if (!isAdmin()) return;
+            const prof = allProfiles.find(p => p.id === profileId);
+            if (!prof) return;
+
+            document.getElementById('edit-profile-id').value = prof.id;
+            document.getElementById('edit-profile-first').value = prof.first_name;
+            document.getElementById('edit-profile-last').value = prof.last_name;
+            document.getElementById('edit-profile-phone').value = prof.phone || '';
+            document.getElementById('edit-profile-role').value = prof.role || 'employee';
+            document.getElementById('edit-profile-rate').value = prof.hourly_rate !== null && prof.hourly_rate !== undefined ? prof.hourly_rate : '';
+
+            const modal = document.getElementById('edit-profile-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditProfileModal() {
+            const modal = document.getElementById('edit-profile-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function handleUpdateProfile(e) {
+            e.preventDefault();
+            if (!isAdmin()) return;
+
+            const id = document.getElementById('edit-profile-id').value;
+            const rateRaw = document.getElementById('edit-profile-rate').value.trim();
+
+            try {
+                const { error } = await sb.from('profiles').update({
+                    first_name: document.getElementById('edit-profile-first').value.trim(),
+                    last_name: document.getElementById('edit-profile-last').value.trim(),
+                    phone: document.getElementById('edit-profile-phone').value.trim(),
+                    role: document.getElementById('edit-profile-role').value,
+                    hourly_rate: rateRaw !== '' ? parseFloat(rateRaw) : null
+                }).eq('id', id);
+
+                if (error) throw error;
+
+                closeEditProfileModal();
+                await loadCloudData();
+                showToast('Team member profile updated!', 'success');
+            } catch (err) {
+                showToast(err.message || 'Unable to update profile.', 'error');
+            }
+        }
+
+        // ============================================================
+        // 11. WEEKLY PDF "REPORTS" GENERATOR (100% IN ENGLISH + N/A LOGIC)
+        // ============================================================
+        function openReportsModal() {
+            const select = document.getElementById('report-employee-select');
+            const selectorWrap = document.getElementById('report-emp-selector-wrap');
+
+            if (isAdmin()) {
+                selectorWrap.classList.remove('hidden');
+                select.innerHTML = allProfiles.map(p =>
+                    `<option value="${p.id}" ${p.id === currentProfile.id ? 'selected' : ''}>${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)} (${formatRateDisplay(p.hourly_rate)})</option>`
+                ).join('') + `<option value="ALL_TEAM">All Team Members (Consolidated Report)</option>`;
+            } else {
+                // Employees ONLY see and download their own report
+                selectorWrap.classList.add('hidden');
+                select.innerHTML = `<option value="${currentProfile.id}" selected>${escapeHtml(currentProfile.first_name)} ${escapeHtml(currentProfile.last_name)}</option>`;
+            }
+
+            document.getElementById('report-week-start').value = getMondayISO(0);
+            const modal = document.getElementById('reports-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeReportsModal() {
+            const modal = document.getElementById('reports-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function generateWeeklyPDFReport() {
+            const selectedEmpId = isAdmin() ? document.getElementById('report-employee-select').value : currentProfile.id;
+            const weekStartInput = document.getElementById('report-week-start').value || getMondayISO(0);
+            const weekEndISO = addDaysISO(weekStartInput, 6);
+
+            const targetProfiles = (isAdmin() && selectedEmpId === 'ALL_TEAM')
+                ? allProfiles
+                : allProfiles.filter(p => p.id === selectedEmpId);
+
+            if (!window.jspdf || !window.jspdf.jsPDF) {
+                showToast('PDF engine unavailable. Please check your connection.', 'error');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Dark Space Header Banner + Vector Orbital Pulse Emblem
+            doc.setFillColor(3, 4, 7);
+            doc.rect(0, 0, 210, 38, 'F');
+
+            doc.setDrawColor(22, 27, 38);
+            doc.setLineWidth(1.1);
+            doc.circle(21, 19, 7.5, 'S');
+            doc.setDrawColor(56, 189, 248);
+            doc.setLineWidth(1.2);
+            doc.line(14.5, 19.3, 17.5, 19.3);
+            doc.line(17.5, 19.3, 19.2, 15.2);
+            doc.line(19.2, 15.2, 21.3, 23.2);
+            doc.line(21.3, 23.2, 23.0, 17.4);
+            doc.line(23.0, 17.4, 24.4, 19.3);
+            doc.line(24.4, 19.3, 27.5, 19.3);
+            doc.setFillColor(217, 119, 87);
+            doc.circle(21, 11.5, 1.1, 'F');
+            doc.circle(27.5, 19.3, 1.0, 'F');
+
+            doc.setTextColor(212, 212, 212);
+            doc.setFontSize(17);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Pay', 33, 17.5);
+            doc.setTextColor(56, 189, 248);
+            doc.text('Pulse', 43.8, 17.5);
+            doc.setTextColor(217, 119, 87);
+            doc.setFontSize(11);
+            doc.text('— WEEKLY HOURS REPORT', 61.5, 17.5);
+
+            doc.setTextColor(163, 163, 163);
+            doc.setFontSize(9.5);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Week Period: ${weekStartInput} to ${weekEndISO}   |   Generated: ${getTodayISO()}`, 33, 25.5);
+
+            let yPos = 48;
+
+            targetProfiles.forEach((prof, idx) => {
+                if (idx > 0 && yPos > 230) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                const empShifts = allShifts
+                    .filter(s => s.user_id === prof.id && s.shift_date >= weekStartInput && s.shift_date <= weekEndISO)
+                    .sort((a, b) => a.shift_date.localeCompare(b.shift_date));
+
+                const totalSecs = empShifts.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+                const totalHrs = totalSecs / 3600;
+                const rateDisplay = formatRateDisplay(prof.hourly_rate);
+                const grossPayDisplay = computePayDisplay(prof.hourly_rate, totalHrs);
+
+                doc.setFillColor(241, 245, 249);
+                doc.roundedRect(14, yPos, 182, 28, 3, 3, 'F');
+
+                doc.setTextColor(15, 23, 42);
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`${prof.first_name} ${prof.last_name}`, 18, yPos + 8);
+
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(71, 85, 105);
+                doc.text(`Email: ${prof.email}   |   Phone: ${prof.phone || 'N/A'}`, 18, yPos + 15);
+                doc.text(`Total Hours Worked: ${totalHrs.toFixed(2)} hrs   |   Hourly Rate: ${rateDisplay}   |   Estimated Gross Pay: ${grossPayDisplay}`, 18, yPos + 22);
+
+                yPos += 33;
+
+                const tableRows = empShifts.length > 0
+                    ? empShifts.map(s => {
+                        const h = (s.duration_seconds || 0) / 3600;
+                        const cat = s.category === 'Other' && s.custom_label ? `Other (${s.custom_label})` : s.category;
+                        const win = (s.start_time && s.end_time) ? `${s.start_time} - ${s.end_time}` : 'Timed Session';
+                        return [
+                            s.shift_date,
+                            win,
+                            cat,
+                            `${h.toFixed(2)} hrs`,
+                            computePayDisplay(prof.hourly_rate, h),
+                            s.notes || '—'
+                        ];
+                    })
+                    : [['—', '—', 'No shifts logged during this week', '0.00 hrs', rateDisplay === 'N/A' ? 'N/A' : '$0.00', '—']];
+
+                doc.autoTable({
+                    startY: yPos,
+                    head: [['Date', 'Time Window', 'Category', 'Hours', 'Est. Pay', 'Notes']],
+                    body: tableRows,
+                    theme: 'grid',
+                    headStyles: { fillColor: [10, 13, 20], textColor: [56, 189, 248], fontSize: 8.5 },
+                    bodyStyles: { fontSize: 8.5, textColor: [30, 41, 59] },
+                    margin: { left: 14, right: 14 }
+                });
+
+                yPos = doc.lastAutoTable.finalY + 14;
+            });
+
+            const fileLabel = (isAdmin() && selectedEmpId === 'ALL_TEAM')
+                ? 'All_Team'
+                : `${targetProfiles[0].first_name}_${targetProfiles[0].last_name}`;
+
+            doc.save(`PayPulse_Weekly_Report_${fileLabel}_${weekStartInput}.pdf`);
+            closeReportsModal();
+            showToast('Weekly PDF report downloaded!', 'success');
+        }
+
+        // ============================================================
+        // 12. NAVIGATION, UTILITIES & LIVE BACKGROUND LOOP
+        // ============================================================
+        function switchMainTab(tab) {
+            if (tab === 'team' && !isAdmin()) tab = 'tracker';
+
+            ['tracker', 'team'].forEach(t => {
+                document.getElementById(`section-${t}`).classList.toggle('hidden', t !== tab);
+                const btn = document.getElementById(`nav-tab-${t}`);
+                if (btn) {
+                    btn.className = t === tab
+                        ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-space-800 text-pulse-cyan transition-all cursor-pointer'
+                        : 'px-3.5 py-1.5 rounded-full text-xs font-semibold text-pulse-textSub hover:text-pulse-textMain transition-all cursor-pointer';
+                }
+            });
+            lucide.createIcons();
+        }
+
+        function startLiveBackgroundLoop() {
+            clearInterval(mainTicker);
+            mainTicker = setInterval(() => {
+                if (activeSession) {
+                    renderDialVisuals();
+
+                    if (breakReminderMinutes > 0) {
+                        const elapsedMins = Math.floor((Date.now() - activeSession.startedAt) / 60000);
+                        if (elapsedMins > 0 && elapsedMins % breakReminderMinutes === 0 && elapsedMins !== lastBreakAlertMinuteMark) {
+                            lastBreakAlertMinuteMark = elapsedMins;
+                            openActiveBreakModal(false);
+                        }
+                    }
+                }
+            }, 1000);
+        }
+
+        function formatRateDisplay(rate) {
+            if (rate === null || rate === undefined || rate === '' || Number(rate) <= 0) return 'N/A';
+            return `$${Number(rate).toFixed(2)}/hr`;
+        }
+
+        function computePayDisplay(rate, hours) {
+            if (rate === null || rate === undefined || rate === '' || Number(rate) <= 0) return 'N/A';
+            return `$${(Number(rate) * hours).toFixed(2)}`;
+        }
+
+        function formatHumanDuration(mins) {
+            if (mins === 0) return 'Open Count-Up';
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            if (h === 0) return `${m}m`;
+            if (m === 0) return `${h}h 00m`;
+            return `${h}h ${String(m).padStart(2, '0')}m`;
+        }
+
+        function formatClockSeconds(totalSec) {
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        function formatTime12h(dateObj) {
+            return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+
+        function format24To12String(time24) {
+            const [hStr, mStr] = time24.split(':');
+            let h = parseInt(hStr, 10);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return `${h}:${mStr} ${ampm}`;
+        }
+
+        function computeMinutesBetween(start24, end24) {
+            const [sH, sM] = start24.split(':').map(Number);
+            const [eH, eM] = end24.split(':').map(Number);
+            return (eH * 60 + eM) - (sH * 60 + sM);
+        }
+
+        function getTodayISO() {
+            return formatDateToISO(new Date());
+        }
+
+        function formatDateToISO(d) {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function getMondayISO(offsetWeeks = 0) {
+            const now = new Date();
+            const day = now.getDay();
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1) + (offsetWeeks * 7);
+            const d = new Date(now.setDate(diff));
+            return formatDateToISO(d);
+        }
+
+        function addDaysISO(isoDate, days) {
+            const d = new Date(isoDate + 'T00:00:00');
+            d.setDate(d.getDate() + days);
+            return formatDateToISO(d);
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            const borderClass = type === 'success' ? 'border-pulse-cyan/50' : (type === 'error' ? 'border-pulse-terra/70' : 'border-space-700');
+            el.className = `pointer-events-auto pulse-card ${borderClass} rounded-2xl px-4 py-3 text-xs sm:text-sm font-semibold text-pulse-textMain shadow-xl flex items-center gap-2.5 transition-all duration-300 translate-y-2 opacity-0`;
+            el.innerHTML = `<span class="w-2 h-2 rounded-full ${type === 'error' ? 'bg-pulse-terra' : 'bg-pulse-cyan'} shrink-0"></span><span>${escapeHtml(msg)}</span>`;
+            container.appendChild(el);
+            requestAnimationFrame(() => el.classList.remove('translate-y-2', 'opacity-0'));
+            setTimeout(() => {
+                el.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => el.remove(), 300);
+            }, 3400);
+        }
+
+        // ============================================================
+        // 13. BOOTSTRAP APPLICATION
+        // ============================================================
+        window.addEventListener('DOMContentLoaded', async () => {
+            initStarfield();
+            buildDialTicks();
+            initDialInteractions();
+            startLiveBackgroundLoop();
+            lucide.createIcons();
+
+            const { data: { session } } = await sb.auth.getSession();
+            if (session && session.user) {
+                await initializeAuthenticatedSession(session.user);
+            } else {
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('auth-screen').classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
